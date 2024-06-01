@@ -1,0 +1,1592 @@
+
+/*@!Encoding:936*/
+/*****************************************************************************
+| C O P Y R I G H T
+|=============================================================================
+|          ANCIT
+|                        ANCIT_UDS LIB Demo script
+|=============================================================================
+| D E S C R I P T I O N
+|=============================================================================
+| Modulname:    UDS_Lib_Demo.can
+| Revision:       V1.0
+-------------------------------------------------------------------------------
+| Autor:  Saravanan Arumugam, ANCIT
+| Created for : to statisfied the ISO-14229
+/*****************************************************************************/
+
+variables
+{
+    /* Global variables */
+
+    /************************************************************************/
+    /*        Beginning of the Global variables Declaration                 */
+    /************************************************************************/  
+ /**** Message ID for your Project ****/  
+    message 0x102 Physical_msgID;         //{Write here your project physical ID}
+    message 0x100 Receive_msgID;           //{Write here your receive ID}
+    message 0x101 Functional_msgID;       //{Write here your project functional ID}
+    const dword diag_txid = 0x102;        //{Write here your project physical ID}
+    const dword diag_rxid = 0x100;        //{Write here your receive ID}
+    const dword diag_funcid = 0x101;        //{Write here your project functional ID}
+    /*** Timing Control***/
+    dword P2TIMEOUT = 150;   // ECU must react within this time (in ms)
+    dword P2EXTTIME = 2000;  // wait time after response pending
+    dword S3TIMEOUT = 5000;
+    dword STmin = 20;
+    dword bSTmin = 20;
+ long FrameWaitTime = 20;
+    /*** Response ***/
+    const FAILURE     = -1;
+    const PASS        = 1;
+    const TIMEOUT     = 0;
+    const FLOWCONTROL = 2;
+    /*** Addressing mode ***/
+    const FunctionalReqAll = 2;         // Multi-Cast
+    const Functional = 1;              //(Broadcast / Multi-cast)
+    const Physical = 0;                //(uni-cast)
+ /***Frame Masking ***/
+    const DTCMask     = 0x09;
+    const FrameMask   = 0xF0;
+    const SingleFrame = 0x00;
+    const FirstFrame  = 0x10;
+    const Consecutive = 0x20;
+    const FlowControl = 0x30;
+    byte  ECU_Response= 0x40;
+    byte  TP_Mask     = 0x80;
+    byte  MultiFrame  = 0x21;
+    /*** Buffer ***/
+    const BufferSize  = 4056;
+    Byte GlobalRxBuffer[BufferSize];
+    char str[100];    
+ /*** Handshaking Flag ***/
+    const char Deactive = 0;
+    const char Active   = 1;
+    const char Debug    = 1;            //Set = 1 for print the debug info on write window
+    const char Success = 0;
+    const char Information = 1;
+    const char Warning = 2;
+    const char Error = 3;
+    char UDS_Active=0;
+    int  UDS_page_id;
+    byte msgReceived = 0;    
+    char ResponsePending=0;
+    char TPResponse = 0;    
+    long Timeout_count;
+    char Flowcontrol_Received = 0;
+    char Flowcontrol_Transmitted = 0;
+    /*** Global BufferLength***/
+    long GlobalRxBufferLength;
+    long TotalDataLength;
+    long DataLength;
+    /*** Response Flag ***/
+    long res1;
+    long res2;
+    enum Boolean { false, true } ;
+ /*** Negative Response Code(NRC) ***/
+    const ErrorCodelength  = 26;
+    byte NEGATIVE_RESPONSE_CODE [ErrorCodelength] =
+    {
+        0x10,//"GeneralReject"},// 0
+        0x11,//"ServiceNotSupported"}, //1
+        0x12,//"SubFunctionNotSupported"}, //2
+        0x13,//"InCorrectMessageLegth-invalidFormat"},//3
+        0x21,//"BusyRepeatRequest"},//4
+        0x22,//"ConditionsNotCorrect"},//5
+        0x24,//RequestSequenceError"},//6
+        0x25,//NoResponseFromSubnetComponent"},//7
+        0x26,//FailurePreventsExecutionOfRequestedAction"},//8
+        0x31,//RequestOutOfRange"},//9
+        0x33,//SecurityAccessDenied / securityAccessRequested"},//10
+        0x35,//InvalidKey"},//11
+        0x36,//ExceedNumberOfAttempts"},//12
+        0x37,//RequiredTimeDelayNotExpired"},//13
+        0x70,//UploadDownloadNotAccepted"},//14
+        0x71,//TransferFataSuspended"},//15
+        0x72,//GeneralProgrammingFailure"},//16
+        0x73,//WrongBlockSequenceCounter"},//17
+        0x78,//RequestCorrectlyRecived-ResponsePending"},//18
+        0x7E,//SubFunctionNotSupportedInActiveDiagnosticSession"},//19
+        0x7F,//ServiceNotSupportedInActiveDiagnosticSession"},//20
+        0x81,//RpmTooHigh"},//21
+        0x82,//RpmTooLow"},//22
+        0x83,//EngineIsRunning"},//23
+        0x84,//EngineIsNotRunning"},//24
+        0x0//TimeoutDiagResponse"} //25
+    };
+    /*** Negative Code declaration ***/
+    char NEGATIVE_RESPONSE_CODE_DATA [ErrorCodelength][100] =
+      {
+          "GeneralReject", // 0
+          "ServiceNotSupported", //1
+          "SubFunctionNotSupported", //2
+          "InCorrectMessageLegth-invalidFormat",//3
+          "BusyRepeatRequest",//4
+          "ConditionsNotCorrect",//5
+          "RequestSequenceError",//6
+          "NoResponseFromSubnetComponent",//7
+          "FailurePreventsExecutionOfRequestedAction",//8
+          "RequestOutOfRange",//9
+          "SecurityAccessDenied / securityAccessRequested",//10
+          "InvalidKey",//11
+          "ExceedNumberOfAttempts",//12
+          "RequiredTimeDelayNotExpired",//13
+          "UploadDownloadNotAccepted",//14
+          "TransferFataSuspended",//15
+          "GeneralProgrammingFailure",//16
+          "WrongBlockSequenceCounter",//17
+          "RequestCorrectlyRecived-ResponsePending",//18
+          "SubFunctionNotSupportedInActiveDiagnosticSession",//19
+          "ServiceNotSupportedInActiveDiagnosticSession",//20
+          "RpmTooHigh",//21
+          "RpmTooLow",//22
+          "EngineIsRunning",//23
+          "EngineIsNotRunning",//24
+          "TimeoutDiagResponse" //25
+      };
+      /************************************************************************/
+      /*             End of the Global variables Declaration                  */
+      /************************************************************************/
+}
+
+/*************************************************************************************
+ *
+ * NAME
+ *     Receiving the diag_rxid messages
+ *
+ * SYNOPSIS
+ *     Receiving Diag related CAN message by using on message diag_rxid
+ *
+ * FUNCTION
+ *     This function receiving data when any changes happened in diag_rxid id and.based on first byte its Identify the Frametype and filtering the TP response
+ *     and Response pending. finally updating the received data into GlobalRxBuffer buffer and setting the corresponding flags.
+ *
+ * INPUTS
+ *     diag_rxid(which message want to read from CAN network)
+ *    
+ * OUTPUTS
+ *     Update the GlobalRxBuffer buffer.
+ *     Set the msgReceived flag when any response coming from ECU  
+ *     Set the Flowcontrol_Received flag when the flow control data received from ECU
+ *     Set the TPResponse flag when the Tester Present response received from ECU
+ *     Set the ResponsePending flag when the Response pending is received from ECU
+ *
+ **************************************************************************************/
+on message diag_rxid
+{  
+    long counter=0;
+    char display_buffer[4000];
+    byte tempcmd_buffer[4000];
+    //Receiving a UDP-Msg ?
+    if((this.DIR == RX) && (UDS_Active==Active))
+    {
+      //Collect the UDS Data
+      /* Identify the Frametype*/
+      switch ((this.BYTE(0) & FrameMask))
+      {
+        /* Single Frame */
+        case SingleFrame:  
+        {
+        if(this.BYTE(1) == 0x7E && (!msgReceived)) //filtering the TP response
+        {
+          writeLineEx(UDS_page_id,Information,"TP response");
+          //buffering the data
+          for(counter=0;counter<this.DLC;counter++)
+          {
+            GlobalRxBuffer[counter] = this.BYTE(counter);
+          }
+          TotalDataLength = this.DLC;
+          /************ Print in Write window   **************************/
+          if(Debug==Active)
+          {  
+            for(counter=1;counter<=TotalDataLength;counter++)
+            tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];    
+            arr2hexstr_Withsymbol(display_buffer,tempcmd_buffer,TotalDataLength);                            
+            writeLineEx(UDS_page_id,Information,"%s message(s) Received.",display_buffer);
+          }
+          /************************nprod00196533************************/
+          if(TotalDataLength == 8 && GlobalRxBuffer[2] == 0x00 && GlobalRxBuffer[3] == 0xAA && GlobalRxBuffer[4] == 0xAA
+          && GlobalRxBuffer[5] == 0xAA && GlobalRxBuffer[6] == 0xAA && GlobalRxBuffer[7] == 0xAA)
+          { TPResponse = 1; }
+          else
+          { TPResponse = 0; }
+           msgReceived = 0;
+        }
+        else if(this.BYTE(1) == 0x7F && this.BYTE(3) == 0x78) //Response pending
+        {
+        ResponsePending = 1;
+        msgReceived = 0;
+        /************ Print in Write window   **************************/
+        if(Debug==Active)
+        {  
+        writeLineEx(UDS_page_id,Information,"Response pending");
+        }
+        /***************************************************************/
+        }
+        else if(!msgReceived) // Receive the Data Byte
+        {
+        //Clear the Buffer
+        for(counter=0;counter<8;counter++)
+        GlobalRxBuffer[counter] = 0x00;
+        //buffering the data
+        for(counter=0;counter<=this.BYTE(0);counter++)
+        {
+        GlobalRxBuffer[counter] = this.BYTE(counter);
+        }
+        TotalDataLength = this.BYTE(0);
+        /************ Print in Write window   **************************/    
+        if(Debug==Active)
+        {  
+        for(counter=1;counter<=TotalDataLength;counter++)
+        tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];    
+        arr2hexstr_Withsymbol(display_buffer,tempcmd_buffer,TotalDataLength);                            
+        writeLineEx(UDS_page_id,Information,"%s message(s) Received.",display_buffer);                    
+        writeLineEx(UDS_page_id,Information,"TotalDataLength = %x h",TotalDataLength);                //Writing received data in write window
+        writeLineEx(UDS_page_id,Information,"Single frame");
+        }
+        /***************************************************************/
+        msgReceived = 1;
+        ResponsePending = 0;
+        }
+        break;
+        }
+        /* First Frame */
+        case FirstFrame:
+        {
+          TotalDataLength = this.BYTE(1);
+          DataLength = this.DLC-2;
+          for(counter=1;counter<8;counter++)
+          {
+            GlobalRxBuffer[counter-1] = this.BYTE(counter);
+          }
+          /************ Print in Write window   **************************/
+          if(Debug==Active)
+          {
+            writeLineEx(UDS_page_id,Information,"TotalDataLength = %d",TotalDataLength); //Writing received data in write window
+            for(counter=1;counter<=DataLength;counter++)
+            tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];    
+            arr2hexstr_Withsymbol(display_buffer,tempcmd_buffer,DataLength);                            
+            writeLineEx(UDS_page_id,Information,"%s message(s) Received.",display_buffer);
+            writeLineEx(UDS_page_id,Information,"DateLength = %d",DataLength);                
+            writeLineEx(UDS_page_id,Information,"First Frame");
+          }
+          /***************************************************************/
+          Flowcontrol_Transmitted = 1;
+          msgReceived = 0;
+          break;
+        }
+        /* Consecutive Frame */
+        case Consecutive:
+        {
+        if((TotalDataLength-DataLength)>8)
+        {
+          for(counter=1;counter<this.DLC;counter++)
+          {
+            GlobalRxBuffer[DataLength+counter] = this.BYTE(counter);
+          }
+          DataLength += 7;
+          /************ Print in Write window   **************************/  
+          if(Debug==Active)
+          {
+            for(counter=7;counter<=DataLength;counter++)
+            tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];    
+            arr2hexstr_Withsymbol(display_buffer,tempcmd_buffer,DataLength);                            
+            writeLineEx(UDS_page_id,Information,"%s message(s) Received.",display_buffer);                      
+            writeLineEx(UDS_page_id,Information,"Multi frame Receiving");
+          }
+          /***************************************************************/
+        }
+        else
+        {
+          for(counter=1;counter<=(TotalDataLength-DataLength);counter++)
+          {
+            GlobalRxBuffer[DataLength+counter] = this.BYTE(counter);
+          }
+          DataLength += (counter-1);
+          msgReceived = 1;
+          /************ Print in Write window   **************************/  
+          if(Debug==Active)
+          {
+            for(counter=(DataLength-7);counter<=DataLength;counter++)
+            tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];    
+            arr2hexstr_Withsymbol(display_buffer,tempcmd_buffer,DataLength);                            
+            writeLineEx(UDS_page_id,Information,"%s message(s) Received.",display_buffer);                    
+            writeLineEx(UDS_page_id,Information,"Multi frame finished");
+          }
+          /***************************************************************/
+        }
+        if(Debug==Active)
+        {
+          writeLineEx(UDS_page_id,Information,"DateLength = %d",DataLength); //Writing received data in write window
+        }
+        break;
+        }
+        Case FlowControl:
+        {                
+          for(counter=0;counter<3;counter++)
+          {
+            GlobalRxBuffer[counter] = this.BYTE(counter);
+          }
+          GlobalRxBufferLength = 2;
+          for(counter=1;counter<=GlobalRxBufferLength;counter++)
+          tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];    
+          arr2hexstr_Withsymbol(display_buffer,tempcmd_buffer,GlobalRxBufferLength);
+          /************ Print in Write window   **************************/
+          if(Debug==Active)
+          {                            
+            writeLineEx(UDS_page_id,Information,"%s message(s) Received.",display_buffer);
+            writeLineEx(UDS_page_id,Information,"GlobalRxBufferLength = %x h",GlobalRxBufferLength); //Writing received data in write window
+            writeLineEx(UDS_page_id,Information,"Flowcontrol Received");
+          }                                    
+          /***************************************************************/
+          Flowcontrol_Received = 1;
+          snprintf(str,40,"Flowcontrol Received - %s",display_buffer);
+          TestStep("ECU Response",str);                
+          STmin   =  GlobalRxBuffer[2];       //STmin time is stored for multi frame
+          break;
+        }
+        default:
+        {
+          for(counter=0;counter<=this.BYTE(0);counter++)
+          {
+            GlobalRxBuffer[counter] = this.BYTE(counter);
+          }
+          GlobalRxBufferLength = this.BYTE(0);
+          /************ Print in Write window   **************************/
+          if(Debug==Active)
+          {
+            for(counter=1;counter<=GlobalRxBufferLength;counter++)
+            tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];    
+            arr2hexstr_Withsymbol(display_buffer,tempcmd_buffer,GlobalRxBufferLength);                            
+            writeLineEx(UDS_page_id,Information,"%s message(s) Received.",display_buffer);
+            writeLineEx(UDS_page_id,Information,"GlobalRxBufferLength = %x h",GlobalRxBufferLength);
+            writeLineEx(UDS_page_id,Information,"Default frame");
+          }
+          /***************************************************************/
+          msgReceived = 1;
+          break;
+          }
+      }
+    }
+    else
+    {        
+    //do nothing
+    }
+}
+
+/*************************************************************************************
+ *
+ * NAME
+ *      Diag FlowControl
+ *
+ * SYNOPSIS
+ *      void myDiagSendFlowControl(byte addressing)
+ *
+ * FUNCTION
+ *      This function will enable the Diagnostic flowcontrol
+ *      
+ *
+ * INPUTS
+ *      addressing (Physical = 0, functional = 1)
+ *    
+ * OUTPUTS
+ *      Enable the Flow Control
+ *
+ **************************************************************************************/
+void myDiagSendFlowControl(byte Address)
+{
+   /* Local variables */
+long counter=0;
+/* Flow Control Frame */  
+byte FlowcontrolByte[8] =
+{
+0x30, 0x08, 0x14,0x00,0x00,0x00,0x00,0x00
+};      
+
+    switch(Address)
+    {
+       case 1:      //Functional Addressing
+       {            
+            Functional_msgID.dlc = 8;
+            for (counter = 0; counter < elcount(FlowcontrolByte); ++counter)
+            Functional_msgID.BYTE(counter) = FlowcontrolByte[counter];
+            output(Functional_msgID);
+            break;
+       }
+       default:     //Physical Addressing
+       {            
+            Physical_msgID.dlc = 8;
+            for (counter = 0; counter < elcount(FlowcontrolByte); ++counter)
+            Physical_msgID.BYTE(counter) = FlowcontrolByte[counter];
+            output(Physical_msgID);
+            break;
+       }  
+    }
+TestStep("Tester Request","FlowControl Transmitted");
+    if(Debug==Active)
+    {
+   writeLineEx(UDS_page_id,Information,"FlowControl Transmitted");
+    }
+}
+
+/*************************************************************************************
+ *
+ * NAME
+ *     Negative Code check
+ *
+ * SYNOPSIS
+ *     void check_negativeresponse(void)
+ *
+ * FUNCTION
+ *     This function will check the Negative code by using below table
+ *     NEGATIVE_RESPONSE_CODE
+ *     NEGATIVE_RESPONSE_CODE_DATA
+ *
+ * INPUTS
+ *     GlobalRxBuffer[3]
+ *    
+ * OUTPUTS
+ *     Negative Error code from the Table
+ *
+ **************************************************************************************/
+void check_negativeresponse(void)
+{
+    /* Local variables */
+    char negative_len=0;
+    char ErrorCode_Found =0;
+    for(negative_len = 0;negative_len<26;negative_len++)            //check the negative response with table and print on the report
+    {
+      if(NEGATIVE_RESPONSE_CODE[negative_len] == GlobalRxBuffer[3])
+      {
+      TestStepFail("ECU Response", "0x%x,0x%x,0x%x message(s) received. (NRC- %s)",GlobalRxBuffer[1],GlobalRxBuffer[2],GlobalRxBuffer[3],NEGATIVE_RESPONSE_CODE_DATA[negative_len]);
+              writeLineEx(UDS_page_id,Error,"0x%x,0x%x,0x%x message(s) received. (NRC- %s)",GlobalRxBuffer[1],GlobalRxBuffer[2],GlobalRxBuffer[3],NEGATIVE_RESPONSE_CODE_DATA[negative_len]);
+              ErrorCode_Found = 1;
+      break;
+      }
+    }
+    if(!ErrorCode_Found)                                            //Print the Not found when the NRC is not available in table
+    {
+        TestStepFail("ECU Response", "0x%x,0x%x,0x%x message(s) received. (NRC- Not found in ErrorCode Table)",GlobalRxBuffer[1],GlobalRxBuffer[2],GlobalRxBuffer[3]);      
+        writeLineEx(UDS_page_id,Error,"0x%x,0x%x,0x%x message(s) received. (NRC- Not found in ErrorCode Table)",GlobalRxBuffer[1],GlobalRxBuffer[2],GlobalRxBuffer[3]);
+    }
+}
+/*************************************************************************************
+ *
+ * NAME
+ *      Wait for response until message event or Timeout
+ *
+ * SYNOPSIS
+ *      char WaitForResponse(byte ,long )
+ *
+ * FUNCTION
+ *      This function is waiting for CAN message event or until timeout
+ *      
+ *
+ * INPUTS
+ *     Address : Functional=1 / Physical=0
+ *     ResponseDelay : Minmum time expected(20ms)
+ *
+ * OUTPUTS
+ *     char (Message Received = 1 or Timeout = 0)
+ *
+ **************************************************************************************/
+char WaitForResponse(byte Address,long ResponseDelay)
+{
+  int retry;
+  long noAnswer=0;
+  long response;
+  long timeout;
+  Timeout_count = 0;
+  msgReceived   = 0;
+  retry   = P2TIMEOUT/ResponseDelay;               //P2 max time
+  if(Debug==Active)
+  {
+    writeLineEx(UDS_page_id,Information,"WaitForResponse");
+  }
+  do
+  {
+    noAnswer = 0;
+    response = TestWaitForTimeout(ResponseDelay);   //20ms time
+    if(ResponsePending)
+    {
+        retry   = P2EXTTIME/ResponseDelay;          //Response Pending Delta-time
+        Timeout_count = 0;
+        ResponsePending =0;                
+    }
+    else if(Flowcontrol_Transmitted)
+    {
+        retry   = P2EXTTIME/ResponseDelay;          //Flow control transmitted to ECU
+        Timeout_count = 0;
+        Flowcontrol_Transmitted =0;  
+        TestWaitForTimeout(FrameWaitTime);                
+        myDiagSendFlowControl(Address);
+    }
+    else if(msgReceived)                            //Diag response is received successfully by message event
+    {
+        noAnswer = 1;        
+    }  
+    else if(1 != response)                          //Timeout
+    {
+        Timeout_count++;        
+    }      
+  } while(noAnswer==0 && (Timeout_count<retry));    //Wait here neither timeout or message is received
+  return noAnswer;                                  //Return (Timeout or Message received)
+}
+
+/*************************************************************************************
+ *
+ * NAME
+ *      Pack the Diag command neither Functional or Physical ID
+ *
+ * SYNOPSIS
+ *     UDS_Address_selection(byte,byte,byte)
+ *
+ * FUNCTION
+ *     This function is packing the command with neither Functional or Physical ID based
+ *     on Address byte(Functional=1 / Physical=0)
+ *
+ * INPUTS
+ *     Address : Functional=1 / Physical=0
+ *     cmd     : diag command which want to transmit to ECU in the form of array
+ *     cmd_len : How many byte want to pack with Address ID
+ * OUTPUTS
+ *      Null
+ *
+ **************************************************************************************/
+Void UDS_Address_selection(byte Address,byte cmd[],byte cmd_len)
+{
+    long counter;
+    char Command_byte = 0;
+    switch(Address)
+    {      
+       case 1:      //Functional Addressing
+       {
+            Functional_msgID.BYTE(0) = cmd_len;
+            for (counter = 1; counter <= cmd_len; ++counter)
+            Functional_msgID.BYTE(counter) = cmd[counter-1];
+            break;
+       }
+       default:     //Physical Addressing
+       {
+            Physical_msgID.BYTE(0)   = cmd_len;
+            for (counter = 1; counter <= cmd_len; ++counter)
+            Physical_msgID.BYTE(counter) = cmd[counter-1];
+            break;
+       }  
+    }
+}
+
+testfunction TF_UDS_Diag_Request(int test,char serviceid[],char serviceresponse[])
+{
+ 
+  UDS_Diag_Request(test,serviceid,serviceresponse);
+ 
+}
+ 
+
+/*************************************************************************************
+ *
+ * NAME
+ *      Send th Diag Command to the ECU via either Functional or Physical Address
+ *
+ * SYNOPSIS
+ *     void Diag_Request(byte ,char ,char)
+ *
+ * FUNCTION
+ *      This function is sending the Diag command using Output function and its receiving
+ *      response through on message.
+ *
+ * INPUTS
+ *     Address : Functional=1 / Physical=0
+ *     cmd     : diag command which want to transmit to ECU in the form of string(ex: "0x10,0x01,..")
+ *     Response : Expected response in the form of string(ex: "0x50,0x01,?,?,?,?,..")  
+ *
+ * OUTPUTS
+ *     Print the Corresponding results in the HTML page and
+ *     return: char(PASS/FAILURE)
+ *
+ **************************************************************************************/
+char UDS_Diag_Request(byte Address/*Functional/Physical*/,char cmd[]/*Diag Request(ex:"0x10,0x01")*/,char Response[]/*Diag response expected(ex:"0x50,0x01,?,?,?,?")*/)
+{
+   /* Local variables */
+    long counter;
+    char retval;
+    char buffer[BufferSize];
+    char display_buffer[BufferSize];
+    byte cmd_buffer[BufferSize];
+    byte tempcmd_buffer[BufferSize];
+    byte Multiframecmd_buffer[BufferSize];
+    byte tempRx_buffer[BufferSize];
+    char address_buffer[100];
+    long lenTx;
+    long Transmit_lenTx;
+    long lenRx;
+    long remain_lenTx;
+    long Transmitted_byte;
+    char Multiframe_PacketCount;
+    UDS_Active = Active;                //Active the CAN message interrupt
+    Transmitted_byte = 0;
+    remain_lenTx = 0;
+    Flowcontrol_Received = 0;
+    STmin   = bSTmin;               //Restore the flow control value
+    msgReceived = TotalDataLength = DataLength = 0;
+
+    lenTx = special_filter(cmd_buffer,cmd);             //filter unwanted char(0x and ,) and make it as a byte of array, get the totel transmitting byte length
+    lenRx = special_filter(tempcmd_buffer,Response);    //filter unwanted char(0x and ,) and make it as a byte of array, get the totel receiving byte length
+    do
+    {
+        //Multi frame identification
+        if((lenTx>7) && (Transmitted_byte == 0))
+        {
+            Multiframecmd_buffer[0] = 0x10;             //Multiframe identification byte(0x10)          
+            Multiframecmd_buffer[1] = lenTx;            //Total lenth of daig request byte
+            for(counter=0;counter<6;counter++)          //Packing remaining first frame with cmd_buffer
+            Multiframecmd_buffer[counter+2] = cmd_buffer[counter];
+            UDS_MultiFrameRequestAddress_selection(Address,Multiframecmd_buffer,8); //Packing the diag request in the Functional_msgID/
+            remain_lenTx     = lenTx-6;
+            Transmitted_byte = 6;
+            //Print the Transmitted byte in the HTML report with x Address
+            if(Address == FunctionalReqAll)
+            strncpy(address_buffer,"FunctionalReqAll",elcount("FunctionalReqAll"));
+            else if(Address == Functional)
+            strncpy(address_buffer,"Functional",elcount("Functional"));
+            else
+            strncpy(address_buffer,"Physical",elcount("Physical"));
+           
+            arr2hexstr_Withsymbol(display_buffer,cmd_buffer,lenTx);
+            to_upper_hex(display_buffer);
+            TestStep("Tester Request", "%s message(s) transmitted. %s Address.",display_buffer,address_buffer);
+            writeLineEx(UDS_page_id,Information,"%s message(s) transmitted.",display_buffer);
+            //multi request frame
+        }
+        //Multi frame remaining byte transmisstion
+        else if(remain_lenTx != 0 && Flowcontrol_Received/*Flag setting by Message event*/)
+        {            
+            if(remain_lenTx>7)
+            {                
+                Multiframe_PacketCount = Transmitted_byte%6;
+                Multiframecmd_buffer[0] = MultiFrame+Multiframe_PacketCount;        
+                for(counter=1;counter<8;counter++)
+                Multiframecmd_buffer[counter] = cmd_buffer[(Transmitted_byte+counter)-1];
+                UDS_MultiFrameRequestAddress_selection(Address,Multiframecmd_buffer,8);
+                remain_lenTx     -= 7;
+                Transmitted_byte += 7;
+            }
+            else
+            {  
+                Multiframe_PacketCount = Transmitted_byte%6;
+                Multiframecmd_buffer[0] = MultiFrame+Multiframe_PacketCount;        
+                for(counter=1;counter<=remain_lenTx;counter++)
+                Multiframecmd_buffer[counter] = cmd_buffer[(Transmitted_byte+counter)-1];
+                UDS_MultiFrameRequestAddress_selection(Address,Multiframecmd_buffer,remain_lenTx+1);                
+                Transmitted_byte += remain_lenTx;
+                Transmit_lenTx    = remain_lenTx+1;
+                remain_lenTx      = 0;
+                Flowcontrol_Received = 0;
+                STmin   = bSTmin;               //Restore the flow control value
+            }
+        }
+        //Single frame request
+        else
+        {            
+            UDS_Address_selection(Address,cmd_buffer,lenTx);
+            //Print the Transmitted byte in the HTML report with x Address
+            if(Address == FunctionalReqAll)
+            strncpy(address_buffer,"FunctionalReqAll",elcount("FunctionalReqAll"));
+            else if(Address == Functional)
+            strncpy(address_buffer,"Functional",elcount("Functional"));
+            else
+            strncpy(address_buffer,"Physical",elcount("Physical"));
+
+            arr2hexstr_Withsymbol(display_buffer,cmd_buffer,lenTx);
+            to_upper_hex(display_buffer);
+            TestStep("Tester Request", "%s message(s) transmitted. %s Address.",display_buffer,address_buffer);
+            writeLineEx(UDS_page_id,Information,"%s message(s) transmitted.",display_buffer);
+        }
+        GlobalRxBufferLength=msgReceived=0;
+
+        // Select the Addressing mode ID and send the byte to the ECU
+        switch(Address)
+        {
+           case 1:      //Functional
+           {
+            Functional_msgID.dlc = 8;
+            output (Functional_msgID);
+            break;
+           }
+           default:     //Physical
+           {
+            Physical_msgID.dlc = 8;
+            output (Physical_msgID);
+            break;
+           }  
+        }
+       
+        //Wait for response(data will update by message event)
+        if((remain_lenTx != 0) && (STmin != 0))  //Multiframe request
+        TestWaitForTimeout(STmin);      //Wait time after flow control received
+        else if((STmin == 0))
+        { /*do nothing*/ }
+        else
+        WaitForResponse(Address,STmin); //default wait time(single frame)
+
+        if(msgReceived) // Flag will get updated by on message event
+        {              
+            //Print Expected Result in the report
+            arr2hexstr_Withsymbol(display_buffer,tempcmd_buffer,lenRx);
+            to_upper_hex(display_buffer);
+            TestStep("Expected", "%s message(s).",display_buffer);
+            writeLineEx(UDS_page_id,Information,"%s message(s).Expected",display_buffer);
+            for(counter=1;counter<=TotalDataLength+1;counter++)
+            tempRx_buffer[counter-1] = GlobalRxBuffer[counter];
+            //All Diag Service other then 0x19 service
+            if((lenRx!=0) && (TotalDataLength==lenRx) && (tempRx_buffer[0] != 0x59))                      
+            {        
+                for(counter=0;counter<lenRx;counter++)
+                {
+                    //Normal validation
+                    if(tempRx_buffer[counter] == tempcmd_buffer[counter])
+                    {
+                        retval = PASS;                
+                    }
+                    else if(tempcmd_buffer[counter] == '?')    // ? validation
+                    {
+                        retval = PASS;
+                    }
+                    else
+                    {
+                        retval = FAILURE;                
+                        break;
+                    }
+                }  
+            }
+            // Under construction -- Saravanan
+            //Diag Service 0x19 0x02
+            else if((lenRx!=0) && (TotalDataLength>=lenRx) && (tempRx_buffer[0]==0x59) && (tempRx_buffer[1]==0x02))
+            {
+                for(counter=0;counter<lenRx;counter++)
+                {
+                    //Normal validation
+                    if(tempRx_buffer[counter] == tempcmd_buffer[counter])
+                    {
+                        retval = PASS;                
+                    }
+                    else if(tempcmd_buffer[counter] == '?')             // ? validation
+                    {
+                        retval = PASS;
+                    }
+                    else if(counter==2)                                 // DTC Mask Byte
+                    {
+                        if((tempRx_buffer[counter]&tempcmd_buffer[counter]) != 0)  // DTC Mask Byte
+                        {
+                            retval = PASS;
+                        }
+                        else
+                        {
+                            retval = FAILURE;                
+                            break;
+                        }
+                    }
+                    else if((counter>5)&&(((counter-2)%4==0)))
+                    {
+                        if((tempRx_buffer[counter]&tempcmd_buffer[counter]) != 0) // DTC Mask Byte
+                        {
+                            retval = PASS;
+                        }
+                        else
+                        {
+                            retval = FAILURE;                
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        retval = FAILURE;                
+                        break;
+                    }
+                }
+            }
+             //Diag Service 0x19 0x06
+            else if((lenRx!=0) && (TotalDataLength>=lenRx) && (tempRx_buffer[0]==0x59) && (tempRx_buffer[1]==0x06))
+            {
+                for(counter=0;counter<lenRx;counter++)
+                {
+                    //Normal validation
+                    if(tempRx_buffer[counter] == tempcmd_buffer[counter])
+                    {
+                        retval = PASS;                
+                    }
+                    else if(tempcmd_buffer[counter] == '?')             // ? validation
+                    {
+                        retval = PASS;
+                    }
+                    else if(counter==5)                                 // DTC Mask Byte
+                    {
+                        if((tempRx_buffer[counter]&tempcmd_buffer[counter]) != 0)  // DTC Mask Byte
+                        {
+                            retval = PASS;
+                        }
+                        else
+                        {
+                            retval = FAILURE;                
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        retval = FAILURE;                
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                retval = FAILURE;
+            }
+            //    Printing the response in the report          
+        switch (retval)  
+        {
+          case FAILURE:
+          {
+              if(GlobalRxBuffer[1]==0x7F)     //Negative response
+              {
+                  check_negativeresponse();
+              }
+              else
+              {
+                  for(counter=1;counter<=TotalDataLength+1;counter++)
+                  tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];
+                  arr2hexstr(display_buffer,tempcmd_buffer,TotalDataLength);                        
+                  to_upper_hex(display_buffer);
+                  TestStepFail("ECU Response", "%s message(s) received.",display_buffer);  
+                  writeLineEx(UDS_page_id,Error,"%s message(s) received.",display_buffer);                      
+              }
+              break;
+          }
+          case PASS:                             // everything okay
+          {
+              for(counter=1;counter<=TotalDataLength+1;counter++)
+              tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];
+              arr2hexstr(display_buffer,tempcmd_buffer,TotalDataLength);                        
+              to_upper_hex(display_buffer);
+              TestStepPass("ECU Response", "%s message(s) received.",display_buffer);
+              writeLineEx(UDS_page_id,Success,"%s message(s) received.",display_buffer);            
+              break;
+          }
+          default:
+          {
+              for(counter=1;counter<=TotalDataLength+1;counter++)
+              tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];
+              arr2hexstr(display_buffer,tempcmd_buffer,TotalDataLength);                        
+              to_upper_hex(display_buffer);
+              TestStepFail("ECU Response", "%s message(s) received.",display_buffer);  
+              writeLineEx(UDS_page_id,Error,"%s message(s) received.",display_buffer);        
+          }
+        }
+        }
+        else if(remain_lenTx == 0)         //Condition to check tester present is enabled        
+        {            
+            if(lenRx!=0)                   //Tester present response is expected(0x3E,0x00)
+            {
+                if((TPResponse)/*3E service*/ && (lenRx==2)) //Tester present response received by on message event and validation byte is 2 byte from tester.
+                {
+                    for(counter=1;counter<=TotalDataLength;counter++)
+                    tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];
+                    arr2hexstr(display_buffer,tempcmd_buffer,TotalDataLength-1);                        
+                    to_upper_hex(display_buffer);
+                    TestStepPass("ECU Response", "%s message(s) received.",display_buffer);  
+                    writeLineEx(UDS_page_id,Success,"%s message(s) received.",display_buffer);          
+                    TPResponse =0;
+                }
+                else                                                    //Timeout(Because of ECU not sending full Packet of data)
+                {                    
+                    //Print Expected Result in the report
+                    arr2hexstr_Withsymbol(display_buffer,tempcmd_buffer,lenRx);
+                    to_upper_hex(display_buffer);
+                    TestStep("Expected", "%s message(s).",display_buffer);
+                    TestStep(" ", "Timeout");
+                    //received byte from ECU
+                    for(counter=1;counter<=DataLength;counter++)
+                    tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];
+                    arr2hexstr(display_buffer,tempcmd_buffer,DataLength);                        
+                    to_upper_hex(display_buffer);
+                    TestStepFail("ECU Response", "%s message(s) received. Expected DLC = %d ,Received DLC = %d ",display_buffer,lenRx,TotalDataLength);
+                    writeLineEx(UDS_page_id,Warning,"No response from ECU");              
+                }
+            }
+            else
+            {
+                if((TPResponse)/*3E service*/ && (lenRx==0))   //Tester present response received by on message event and no validation byte(SPR)
+                {
+                    for(counter=1;counter<=TotalDataLength;counter++)
+                    tempcmd_buffer[counter-1] = GlobalRxBuffer[counter];
+                    arr2hexstr_Withsymbol(display_buffer,tempcmd_buffer,TotalDataLength-1);                        
+                    to_upper_hex(display_buffer);
+                    TestStep("Expected", "Suppress Positive Response(SPR).");
+                    TestStepFail("ECU Response", "%s message(s) received.",display_buffer);  
+                    writeLineEx(UDS_page_id,Error,"%s message(s) received.",display_buffer);                    
+                    TPResponse =0;
+                }
+                else
+                {
+                    TestStepPass("ECU Response","Suppress Positive Response(SPR)");
+                    writeLineEx(UDS_page_id,Success,"Suppress Positive Response(SPR)");
+                }
+            }
+        }
+        else
+        {
+            //Do nothing
+        }      
+    }          
+    while(remain_lenTx != 0); //wait here untill transmit byte is over(Multi-frame)
+    UDS_Active = Deactive;//DeActive the CAN message interrupt
+    return retval;            //Return the status(PASS/FAILURE)
+}
+
+/*************************************************************************************
+ *
+ * NAME
+ *     special_filter
+ *
+ * SYNOPSIS
+ *     void special_filter(byte,char)
+ *
+ * FUNCTION
+ *     special_filter function is filtering the special characters(", and 0x") from the given string array and
+ *     Make it as a Chararray. It will return length of the chararray
+ *
+ * INPUTS
+ *     cmd     : diag command which want to transmit to ECU in the form of string array(ex: "0x10,0x01,..")
+ *    
+ * OUTPUTS
+ *     dest    : diag command which want to transmit to ECU in the form of char array(ex: 0x10,0x01)
+ *     idx_result : Length of the chararray(dest)
+ **************************************************************************************/
+long special_filter (byte dest[]/*Diag command in the form of byte of array*/,char cmd[]/*Diag command in the form of string*/)
+{
+   /* Local variables */
+    long counter;
+    char temp_cmd[4000];
+    int cnt;    
+    long validbytecnt=0;
+    int idx_num;
+    int idx_hex;
+    int idx_result;
+    char hexnum[4000];
+    idx_num = 0;
+    idx_result = 0;
+    cnt = 0;
+    // Remove the ',' char
+    for (counter = 0; counter <= strlen(cmd); ++counter)
+    {
+        if(cmd[counter] != ',')
+        {
+            temp_cmd[cnt++] = cmd[counter];                      
+        }
+    }
+    strncpy(cmd,temp_cmd,cnt);
+    //remove "0x" and make it "xx" as a 1byte
+    for(idx_hex =0; idx_hex < strlen(cmd);)
+    {
+         // in case 0x is already part of string skip it
+         if ( cmd[idx_hex] == '0' && ( cmd[idx_hex+1] == 'x' ||  cmd[idx_hex+1] == 'X'))
+         {
+            idx_hex += 2;
+            continue;
+         }
+         // in case ? is already part of string skip it
+         if (cmd[idx_hex] == '?')
+         {
+            dest[idx_result] = cmd[idx_hex];
+            idx_hex++;
+            idx_result++;
+            continue;
+         }
+         // "inform" atol, to handle num as hex number: use 0x prefix
+ 
+         // if length is odd then first char is used as single byte
+         if ( (idx_hex == 0 && strlen(cmd) % 2 != 0) || (idx_hex == strlen(cmd)-1))
+         {
+              snprintf(hexnum,elcount(hexnum),"0x%c",cmd[idx_hex]);
+              idx_hex++;
+         }
+         else
+         {
+             snprintf(hexnum,elcount(hexnum),"0x%c%c",cmd[idx_hex], cmd[idx_hex+1]);
+             idx_hex+=2;
+         }
+         dest[idx_result] = atol( hexnum ) & 0xFF;        // convert char to num and store it
+         idx_result++;
+    }
+    hexnum[0] = '\0';
+    return idx_result; //Return the byte lenth which is stored in dest[] buffer
+}
+
+/*************************************************************************************
+ *
+ * NAME
+ *      Pack the Diag command neither Functional or Physical ID
+ *
+ * SYNOPSIS
+ *     UDS_MultiFrameRequestAddress_selection(byte,byte,byte)
+ *
+ * FUNCTION
+ *     This function is packing the command with neither Functional or Physical ID based
+ *     on Address byte(Functional=1 / Physical=0)
+ *
+ * INPUTS
+ *     Address : Functional=1 / Physical=0
+ *     cmd     : diag command which want to transmit to ECU in the form of array
+ *     cmd_len : How many byte want to pack with Address ID
+ * OUTPUTS
+ *      Null
+ *
+ **************************************************************************************/
+Void UDS_MultiFrameRequestAddress_selection(byte Address,byte cmd[],byte cmd_len)
+{
+    long counter;
+    char Command_byte = 0;
+    switch(Address)
+    {
+       case 1:      //Functional Addressing
+       {            
+            for (counter = 0; counter < cmd_len; ++counter)
+            Functional_msgID.BYTE(counter) = cmd[counter];
+            break;
+       }
+       default:     //Physical Addressing
+       {            
+            for (counter = 0; counter < cmd_len; ++counter)
+            Physical_msgID.BYTE(counter) = cmd[counter];
+            break;
+       }  
+    }
+}
+
+void arr2hexstr_Withsymbol(char dest[], byte arr[], long end_arr)
+{
+  arr2hexstr_Withsymbol(  dest, arr, end_arr, "0x", ",");
+} //
+
+/*************************************************************************************
+ *
+ * NAME
+ *      Convert byte array to a hex string
+ *
+ * SYNOPSIS
+ *      void arr2hexstr_Withsymbol(char dest[], byte arr[], long arr_len, char prefix[], char delim[])
+ *      void arr2hexstr_Withsymbol(char dest[], byte arr[], long end_arr)
+ *
+ * FUNCTION
+ *      This functions converts an array of bytes to a hex string.
+ *
+ * INPUTS
+ *      2nd arg: byte array
+ *      3rd arg: length of array
+ *      4th arg: prefix for each byte, optional default is "0x"
+ *      5th arg: delimiter between two bytes, optional default is ","
+ *
+ * OUTPUTS
+ *      1st arg: dest  - destination string
+ *
+ **************************************************************************************/
+void arr2hexstr_Withsymbol(char dest[], byte arr[], long arr_len, char prefix[], char delim[])
+{
+  int idx;
+  char num[255];
+
+  dest[0]=0x00;
+
+  for (idx =0; idx < arr_len; idx++ ) // loop over the complete byte array
+  {
+      if (idx < arr_len-1)  // check if last element in array ...
+      {
+         // ... no -> add also a delimited string
+         if(arr[idx] == '?')
+          snPrintf(num, elcount(num), "?,");
+         else
+         snPrintf(num, elcount(num), "%s%02x%s", prefix,arr[idx],delim);
+      }
+      else
+      {
+         // ... yes, no element follows hence add no delimiter string
+          if(arr[idx] == '?')
+          snPrintf(num, elcount(num), "?,");
+          else
+         snPrintf(num, elcount(num), "%s%02x", prefix,arr[idx]);
+      }
+
+        strcat(dest,num);
+  } // for
+} // arr2hexstr_Withsymbol
+
+/*************************************************************************************
+ *
+ * NAME
+ *     to_upper - converst lower case into uppercase
+ *
+ * SYNOPSIS
+ *      int
+ *
+ * FUNCTION
+ *        This function converts lower case chars into upper case chars
+ *        
+ * INPUTS
+ *      1st arg:  source string
+ *
+ * OUTPUTS
+ *      1st arg: modified source string
+ *      
+ **************************************************************************************/
+void to_upper_hex(char src[])
+{
+    int idx;
+ 
+    for ( idx = 0; idx <strlen(src); idx++)
+    {
+      if (src[idx] >= 'a'&& src[idx] <= 'f')
+      {
+              src[idx] -= abs('A' - 'a');
+      }
+    } // for
+} // to_upper
+
+enum Boolean check_str_equal (char a[], char b[])
+{
+   enum Boolean bRes;
+   
+   if ( 0 ==  strncmp(a, b, strlen(a)+ strlen(b)))
+   {
+      bRes = true;
+   }
+   else
+   {
+      bRes = false;
+   }
+
+   return bRes;  
+}
+
+void split_ini_line_ ( char src[], char keyword[], int &argc, char args[][])
+{
+    int pos;
+    int len;
+    char strTemp[1000];
+    int  posTemp;
+    int  strTempCounter;
+ 
+    len = strlen(src);
+    pos = 0;
+    argc = 0;
+    keyword[0] = '\0';
+    strTempCounter = 0;
+
+    while (pos < len)
+    {
+       // skip everything until keyword starts
+       while ( !is_alphanum_conversion( src[pos] ) && pos < len)
+       {
+
+          if (src[pos] == '"')
+          {
+             break; // string is handled below
+          }
+              // check if comment
+          if ( (src[pos] == '#')|| (src[pos] == '/' && src[pos+1] == '/'))
+          {
+            return; // ignore comment part
+          }
+          pos++;
+       }
+       posTemp = 0;
+       if (pos >= len) break;
+
+       // check if argument is enclosed in quotes: "
+       if ( src[pos] == '"')  // string starts
+       {
+          pos++; // skip quote
+          while ( src[pos] != '"' && pos < len)
+          {
+            if (src[pos] == '\\' )
+            {
+               if (src[pos+1] == '"')
+               {
+                  pos++;
+               }
+            }
+            strTemp[posTemp++] = src[pos++];
+          } // while
+          pos++;
+          strTemp[posTemp] = '\0';
+          strTempCounter++;
+       }
+       else
+       {
+          while (is_alphanum_conversion( src[pos]))
+          {
+             strTemp[posTemp++] = src[pos++];
+          }
+          strTemp[posTemp] = '\0';
+          strTempCounter++;
+       }
+
+       if (posTemp == 0)
+       {
+          pos++;
+       }
+
+       if ( strTempCounter == 1)
+       {
+          strncpy(keyword,strTemp,posTemp+1);
+       }
+       else
+       {
+          strncpy(args[argc++],strTemp,posTemp+1);
+       }
+    }
+
+    return;
+}
+
+enum Boolean is_alpha_conversion ( char ch)
+{
+  /* This function checks if the whether the character passed as argument to this function
+     between "a-z"/"A-Z" */
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // param ch                         input character to function
+    //
+    // return value
+    //                                  == true - if the condition is true
+    //                                  == false - if the condition is false
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  return ((ch >= 'a' && ch <= 'z')  || (ch >= 'A' && ch <= 'Z')) ? true : false;
+}
+
+int is_alphanum_conversion(char ch)
+{
+  /* This function checks if the whether the character passed as argument to this function
+     between "a-z"/"A-Z"/"0-9"/"-"/"_" */
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // param ch                         input character to function
+    //
+    // return value
+    //                                  == true - if the condition is true
+    //                                  == false - if the condition is false
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  return  ( ch >= 'a' && ch <= 'z') ||
+          ( ch >= 'A' && ch <= 'Z') ||
+          ( ch >= '0' && ch <= '9') ||
+            ch == '_' ||
+            ch == '-';
+}
+
+/*************************************************************************************
+ *
+ * NAME
+ *      Convert byte array to a hex string
+ *
+ * SYNOPSIS
+ *      void arr2hexstr(char dest[], byte arr[], long arr_len, char prefix[], char delim[])
+ *      void arr2hexstr(char dest[], byte arr[], long end_arr)
+ *
+ * FUNCTION
+ *      This functions converts an array of bytes to a hex string.
+ *
+ * INPUTS
+ *      2nd arg: byte array
+ *      3rd arg: length of array
+ *      4th arg: prefix for each byte, optional default is "0x"
+ *      5th arg: delimiter between two bytes, optional default is ","
+ *
+ * OUTPUTS
+ *      1st arg: dest  - destination string
+ *
+ **************************************************************************************/
+void arr2hexstr(char dest[], byte arr[], long arr_len, char prefix[], char delim[])
+{
+  int idx;
+  char num[255];
+
+  dest[0]=0x00;
+
+  for (idx =0; idx < arr_len; idx++ ) // loop over the complete byte array
+  {
+        if (idx < arr_len-1)  // check if last element in array ...
+        {
+           // ... no -> add also a delimited string
+           snPrintf(num, elcount(num), "%s%02x%s", prefix,arr[idx],delim);
+        }
+        else
+        {
+           // ... yes, no element follows hence add no delimiter string
+           snPrintf(num, elcount(num), "%s%02x", prefix,arr[idx]);
+        }
+
+        strcat(dest,num);
+  } // for
+} // arr2hexstr
+
+void arr2hexstr(char dest[], byte arr[], long end_arr)
+{
+  arr2hexstr(  dest, arr, end_arr, "0x", ",");
+} // arr2hexstr
+
+/*************************************************************************************
+ *
+ * NAME
+ *      String concatanation
+ *
+ * SYNOPSIS
+ *      void strcat (char  dest[], char src[])
+ *      void strcat (char  dest[], char src1[], char src2[])
+ *      void strcat (char  dest[], char src1[], char src2[], char src3[])
+ *      void strcat (char  dest[], char src1[], char src2[], char src3[], char src4[])
+ *
+ * FUNCTION
+ *        this function concatenates string
+ *        
+ * INPUTS
+ *      2nd arg:  str 1
+ *      3rd arg:  str 2 (optinal)
+ *      4rd arg:  str 3 (optinal)
+ *      5rd arg:  str 4 (optinal)
+ *
+ * OUTPUTS
+ *      1st arg: dest  - destination array
+ *
+ **************************************************************************************/
+void strcat(char  dest[], char src[])
+{
+   int idx_dest;
+   int idx_src;
+
+   idx_dest = 0;
+
+   while (dest[idx_dest] != '\0')
+   {
+      idx_dest++;
+   }
+
+   for (idx_src=0;idx_src <= strlen(src);idx_src++)
+   {
+     dest[idx_dest+idx_src] = src[idx_src];
+     // Note: the trailing NUL byte is copied as well!
+   }
+}
+
+testcase ANCIT_Group1_Testcase1(void)
+{
+   /* Local variables */
+   /************************************************************************/
+   /*                        Beginning of the test case                 */
+   /************************************************************************/
+    TestCaseDescription("Example testcase1 for Group1");  
+    TestStep("Pre","Default Session");
+   /*************************** Pre Conditions ****************************/
+    res1 = UDS_Diag_Request(Physical,"0x10,0x01","0x50,0x01,?,?,?,?");    
+    if(res1==PASS)
+    {
+        TestWaitForTimeout(10000);  
+        TestStep("Heading","Diag Command - 1");  
+   /*************************** Testcase **********************************/        
+        UDS_Diag_Request(Physical,"0x22,0xF1,0x9E","0x62,0xF1,0x9E,?,?,?,?");    
+   /***************************     Time measurement begin ****************/                                                                
+       TestWaitForTimeout(500);                                          
+       TestStep("Heading","Diag Command - 2");  
+   /*************************** Testcase **********************************/                                                                  
+        UDS_Diag_Request(Physical,"0x22,0xF1,0xA2","0x62,0xF1,0xA2,?,?,?,?");    
+    }
+    else
+    {
+    //Do nothing
+    }
+    TestWaitForTimeout(500);          
+   /************************************************************************/
+   /*                         End of the test routine                      */
+   /************************************************************************/
+}
+
+testcase ANCIT_Group1_Testcase2(void)
+{
+   /* Local variables */
+   /************************************************************************/
+   /*                        Beginning of the test case                 */
+   /************************************************************************/
+    TestCaseDescription("Example testcase1 for Group1");  
+    TestStep("Pre","Default Session");
+   /*************************** Pre Conditions ****************************/
+    res1 = UDS_Diag_Request(Physical,"0x10,0x01","0x50,0x01,?,?,?,?");    
+    if(res1==PASS)
+    {
+        TestWaitForTimeout(10000);  
+        TestStep("Heading","Diag Command - 1");  
+   /*************************** Testcase **********************************/        
+        UDS_Diag_Request(Physical,"0x22,0xF1,0x9E","0x62,0xF1,0x9E,?,?,?,?");    
+   /***************************     Time measurement begin ****************/                                                                
+       TestWaitForTimeout(500);                                          
+       TestStep("Heading","Diag Command - 2");  
+   /*************************** Testcase **********************************/                                                                  
+        UDS_Diag_Request(Physical,"0x22,0xF1,0xA2","0x62,0xF1,0xA2,?,?,?,?");    
+    }
+    else
+    {
+    //Do nothing
+    }
+    TestWaitForTimeout(500);          
+   /************************************************************************/
+   /*                         End of the test routine                      */
+   /************************************************************************/
+}
+
+testcase ANCIT_Group2_Testcase1(void)
+{
+   /* Local variables */
+   /************************************************************************/
+   /*                        Beginning of the test case                 */
+   /************************************************************************/
+    TestCaseDescription("Example testcase1 for Group1");  
+    TestStep("Pre","Default Session");
+   /*************************** Pre Conditions ****************************/
+    res1 = UDS_Diag_Request(Physical,"0x10,0x01","0x50,0x01,?,?,?,?");    
+    if(res1==PASS)
+    {
+        TestWaitForTimeout(10000);  
+        TestStep("Heading","Diag Command - 1");  
+   /*************************** Testcase **********************************/        
+        UDS_Diag_Request(Physical,"0x22,0xF1,0x9E","0x62,0xF1,0x9E,?,?,?,?");    
+   /***************************     Time measurement begin ****************/                                                                
+       TestWaitForTimeout(500);                                          
+       TestStep("Heading","Diag Command - 2");  
+   /*************************** Testcase **********************************/                                                                  
+        UDS_Diag_Request(Physical,"0x22,0xF1,0xA2","0x62,0xF1,0xA2,?,?,?,?");    
+    }
+    else
+    {
+    //Do nothing
+    }
+    TestWaitForTimeout(500);          
+   /************************************************************************/
+   /*                         End of the test routine                      */
+   /************************************************************************/
+}
+
+testcase ANCIT_Group2_Testcase2(void)
+{
+   /* Local variables */
+   /************************************************************************/
+   /*                        Beginning of the test case                 */
+   /************************************************************************/
+    TestCaseDescription("Example testcase1 for Group1");  
+    TestStep("Pre","Default Session");
+   /*************************** Pre Conditions ****************************/
+    res1 = UDS_Diag_Request(Physical,"0x10,0x01","0x50,0x01,?,?,?,?");    
+    if(res1==PASS)
+    {
+        TestWaitForTimeout(10000);  
+        TestStep("Heading","Diag Command - 1");  
+   /*************************** Testcase **********************************/        
+        UDS_Diag_Request(Physical,"0x22,0xF1,0x9E","0x62,0xF1,0x9E,?,?,?,?");    
+   /***************************     Time measurement begin ****************/                                                                
+       TestWaitForTimeout(500);                                          
+       TestStep("Heading","Diag Command - 2");  
+   /*************************** Testcase **********************************/                                                                  
+        UDS_Diag_Request(Physical,"0x22,0xF1,0xA2","0x62,0xF1,0xA2,?,?,?,?");    
+    }
+    else
+    {
+    //Do nothing
+    }
+    TestWaitForTimeout(500);          
+   /************************************************************************/
+   /*                         End of the test routine                      */
+   /************************************************************************/
+}
+
+testcase ANCIT_Group3_Testcase1(void)
+{
+   /* Local variables */
+   /************************************************************************/
+   /*                        Beginning of the test case                 */
+   /************************************************************************/
+    TestCaseDescription("Example testcase1 for Group1");  
+    TestStep("Pre","Default Session");
+   /*************************** Pre Conditions ****************************/
+    res1 = UDS_Diag_Request(Physical,"0x10,0x01","0x50,0x01,?,?,?,?");    
+    if(res1==PASS)
+    {
+        TestWaitForTimeout(10000);  
+        TestStep("Heading","Diag Command - 1");  
+   /*************************** Testcase **********************************/        
+        UDS_Diag_Request(Physical,"0x22,0xF1,0x9E","0x62,0xF1,0x9E,?,?,?,?");    
+   /***************************     Time measurement begin ****************/                                                                
+       TestWaitForTimeout(500);                                          
+       TestStep("Heading","Diag Command - 2");  
+   /*************************** Testcase **********************************/                                                                  
+        UDS_Diag_Request(Physical,"0x22,0xF1,0xA2","0x62,0xF1,0xA2,?,?,?,?");    
+    }
+    else
+    {
+    //Do nothing
+    }
+    TestWaitForTimeout(500);          
+   /************************************************************************/
+   /*                         End of the test routine                      */
+   /************************************************************************/
+}
+
+testcase ANCIT_Group3_Testcase2(void)
+{
+   /* Local variables */
+   /************************************************************************/
+   /*                        Beginning of the test case                 */
+   /************************************************************************/
+    TestCaseDescription("Example testcase1 for Group1");  
+    TestStep("Pre","Default Session");
+   /*************************** Pre Conditions ****************************/
+    res1 = UDS_Diag_Request(Physical,"0x10,0x01","0x50,0x01,?,?,?,?");    
+    if(res1==PASS)
+    {
+        TestWaitForTimeout(10000);  
+        TestStep("Heading","Diag Command - 1");  
+   /*************************** Testcase **********************************/        
+        UDS_Diag_Request(Physical,"0x22,0xF1,0x9E","0x62,0xF1,0x9E,?,?,?,?");    
+   /***************************     Time measurement begin ****************/                                                                
+       TestWaitForTimeout(500);                                          
+       TestStep("Heading","Diag Command - 2");  
+   /*************************** Testcase **********************************/                                                                  
+        UDS_Diag_Request(Physical,"0x22,0xF1,0xA2","0x62,0xF1,0xA2,?,?,?,?");    
+    }
+    else
+    {
+    //Do nothing
+    }
+    TestWaitForTimeout(500);          
+   /************************************************************************/
+   /*                         End of the test routine                      */
+   /************************************************************************/
+}
+
+testcase Initialization(void)
+{
+   /* Local variables */
+   /************************************************************************/
+   /*                        Beginning of the test case                 */
+   /************************************************************************/
+    TestCaseDescription("Example testcase1 for Group1");  
+    TestStep("Pre","Default Session");
+   /*************************** Pre Conditions ****************************/
+    res1 = UDS_Diag_Request(Physical,"0x10,0x01","0x50,0x01,?,?,?,?");    
+    if(res1==PASS)
+    {
+        //Do nothing
+    }
+    else
+    {
+    //Do nothing
+    }
+    TestWaitForTimeout(500);          
+   /************************************************************************/
+   /*                         End of the test routine                      */
+   /************************************************************************/
+}
